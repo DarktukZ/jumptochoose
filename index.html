@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jump to Choose</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Bungee&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg0: #04060d; --bg1: #0a1422; --teal: #3ff5d0; --pink: #ff3d8b; --gold: #ffc94a;
+    --ink: #eaf6ff; --muted: #8fa6bd; --good: #4dff9a; --bad: #ff4d6a;
+    --display: Bungee, "Arial Black", Impact, sans-serif;
+    --body: Archivo, -apple-system, "Segoe UI", sans-serif;
+    --math: "STIX Two Text", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(--ink); font-family: var(--body); user-select: none; }
+  .m { font-family: var(--math); font-style: italic; }
+  sup { font-size: .62em; }
+
+  /* ---------- background: void + drifting dust (like the space drift in Escape the Real Line) ---------- */
+  .void { position: fixed; inset: -8%; background:
+      radial-gradient(900px 600px at 50% 25%, #12304a 0%, transparent 70%),
+      radial-gradient(1200px 800px at 50% 110%, #2a0b2a 0%, transparent 65%),
+      linear-gradient(#060b16, var(--bg0));
+    animation: drift 40s ease-in-out infinite alternate; }
+  @keyframes drift { to { transform: scale(1.08) translate(-1.5%, -1%) rotate(.8deg); } }
+  canvas#dust, canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  canvas#fx { z-index: 30; }
+
+  /* ---------- 3D bridge ---------- */
+  .scene { position: fixed; inset: 0; perspective: 1100px; perspective-origin: 50% 18%; }
+  .bridge { position: absolute; left: 50%; top: 74%; width: 0; height: 0; transform-style: preserve-3d;
+    transform: rotateX(60deg) translate3d(0, var(--cam, 0px), 0);
+    transition: transform 1.1s cubic-bezier(.45, 0, .2, 1); }
+  .bridge > * { position: absolute; transform-style: preserve-3d; }
+
+  .rail { width: 10px; background: linear-gradient(90deg, #1b2a3a, #5b7690, #1b2a3a); border-radius: 4px;
+    box-shadow: 0 0 18px rgba(63, 245, 208, .25); }
+  .platform { border-radius: 14px; background:
+      repeating-linear-gradient(90deg, #1a2433 0 40px, #202d3f 40px 80px);
+    border: 3px solid #34465e; box-shadow: 0 0 0 6px #0c131d, 0 30px 60px #000; }
+  .platform.end { border-color: var(--gold); box-shadow: 0 0 0 6px #0c131d, 0 0 60px rgba(255, 201, 74, .35); }
+  .rowno { font: 900 64px/1 var(--display); color: rgba(255,255,255,.08); text-align: center; }
+
+  .glass { border-radius: 10px; cursor: pointer;
+    background: linear-gradient(135deg, rgba(160, 255, 240, .28), rgba(63, 245, 208, .08) 45%, rgba(255, 255, 255, .22) 55%, rgba(63, 245, 208, .1));
+    border: 3px solid rgba(160, 255, 240, .75);
+    box-shadow: 0 0 22px rgba(63, 245, 208, .45), inset 0 0 30px rgba(255, 255, 255, .12);
+    display: grid; place-items: center; transition: box-shadow .35s, border-color .35s, background .35s, opacity .4s; }
+  .glass .lab { text-align: center; color: #fff; text-shadow: 0 0 12px rgba(63, 245, 208, .9), 0 2px 0 rgba(0,0,0,.5); pointer-events: none; }
+  .glass .lab b { display: block; font: 400 30px/1 var(--display); color: var(--teal); }
+  .glass .lab > span { display: block; font-size: 44px; font-weight: 700; margin-top: 6px; }
+  .glass.dim { opacity: .45; }
+  .glass.pick { border-color: #fff; animation: pick .55s ease-in-out infinite alternate; }
+  .glass.pick .lab b { color: #fff; }
+  @keyframes pick { from { box-shadow: 0 0 20px rgba(255, 201, 74, .4), inset 0 0 20px rgba(255,255,255,.1); background-color: rgba(255, 201, 74, 0); }
+                    to { box-shadow: 0 0 70px rgba(255, 201, 74, .95), inset 0 0 60px rgba(255, 230, 150, .55); background-color: rgba(255, 201, 74, .35); border-color: var(--gold); } }
+  .choices span { transition: color .25s, transform .25s; }
+  .choices span.on { color: var(--gold); transform: scale(1.08); }
+  .confirm { margin-top: 10px; font-size: clamp(18px, 1.7vw, 24px); color: var(--muted); min-height: 1.3em; }
+  .confirm kbd { font: 400 .9em var(--display); color: var(--gold); }
+  .glass.active:hover { border-color: #fff; box-shadow: 0 0 40px rgba(63, 245, 208, .8), inset 0 0 40px rgba(255,255,255,.25); }
+  .glass.safe { border-color: var(--good); background: linear-gradient(135deg, rgba(77, 255, 154, .4), rgba(77, 255, 154, .12)); box-shadow: 0 0 50px rgba(77, 255, 154, .7); }
+  .glass.safe .lab b { color: var(--good); }
+  .glass.crack { animation: shake .32s linear; border-color: var(--bad); }
+  .glass.crack svg { opacity: 1; }
+  .glass svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .1s; }
+  .glass.gone { opacity: 0; pointer-events: none; transition: opacity .05s; }
+  @keyframes shake { 25% { translate: -5px 0; } 50% { translate: 5px 2px; } 75% { translate: -3px -2px; } }
+  .shard { background: linear-gradient(135deg, rgba(200, 255, 245, .6), rgba(63, 245, 208, .2)); border: 1px solid rgba(220,255,250,.8);
+    transition: transform 1.1s cubic-bezier(.4, 0, .9, .6), opacity 1.1s ease-in; }
+
+  .shadow { width: 120px; height: 46px; border-radius: 50%; background: radial-gradient(rgba(0,0,0,.65), transparent 70%); }
+  .hero { width: 170px; height: 152px; transform-origin: 50% 100%; pointer-events: none; }
+  .hero img { width: 100%; height: 100%; display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  .cake { width: 270px; height: 270px; transform-origin: 50% 100%; }
+  .cake img { width: 100%; height: 100%; animation: bob 2.4s ease-in-out infinite; }
+  .cake .rays { position: absolute; left: 50%; top: 45%; width: 520px; height: 520px; margin: -260px; border-radius: 50%; z-index: -1;
+    background: repeating-conic-gradient(rgba(255, 201, 74, .22) 0 10deg, transparent 10deg 24deg);
+    mask: radial-gradient(closest-side, #000 30%, transparent); -webkit-mask: radial-gradient(closest-side, #000 30%, transparent);
+    animation: spin 18s linear infinite; }
+  @keyframes bob { 50% { transform: translateY(-14px); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .fog { position: fixed; left: 0; right: 0; top: 0; height: 34%; pointer-events: none;
+    background: linear-gradient(var(--bg0) 10%, rgba(4, 6, 13, .7) 50%, transparent); }
+
+  /* ---------- HUD ---------- */
+  .hud { position: fixed; left: 50%; top: 22px; translate: -50% 0; width: min(1100px, calc(100vw - 32px)); z-index: 20;
+    padding: 20px 30px 22px; border-radius: 22px; background: rgba(8, 14, 26, .82); backdrop-filter: blur(8px);
+    border: 2px solid rgba(63, 245, 208, .35); box-shadow: 0 20px 60px rgba(0,0,0,.6);
+    transition: opacity .5s, transform .5s cubic-bezier(.2, 1.4, .4, 1); }
+  .hud.hide { opacity: 0; transform: translateY(-30px) scale(.96); pointer-events: none; }
+  .hud .top { display: flex; justify-content: space-between; align-items: center; font: 400 20px var(--display); color: var(--teal); letter-spacing: .04em; }
+  .pips { display: flex; gap: 10px; }
+  .pips i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(63,245,208,.6); transition: all .4s; }
+  .pips i.done { background: var(--good); border-color: var(--good); box-shadow: 0 0 12px var(--good); }
+  .pips i.now { border-color: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.15); }
+  .q { margin-top: 12px; font-size: clamp(30px, 3.4vw, 50px); font-weight: 700; line-height: 1.2; }
+  .choices { display: flex; justify-content: space-between; margin-top: 16px; font-size: clamp(22px, 2.3vw, 32px); font-weight: 700; color: var(--muted); }
+  .choices kbd { font: 400 .8em var(--display); padding: 2px 12px; border-radius: 8px; background: #16263a; color: var(--teal); border: 1px solid #2d4560; margin: 0 8px; }
+  .verdict { margin-top: 14px; font-size: clamp(22px, 2.3vw, 32px); min-height: 1.3em; }
+  .verdict.ok { color: var(--good); } .verdict.no { color: var(--bad); }
+  .verdict .why { color: var(--ink); font-weight: 500; margin-left: 10px; }
+  .verdict .next { display: block; margin-top: 6px; font-size: .7em; color: var(--muted); }
+  .pop { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); }
+  @keyframes pop { from { transform: scale(.7); opacity: 0; } }
+
+  .overlay { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; text-align: center; pointer-events: none;
+    transition: opacity .6s; }
+  .overlay.hide { opacity: 0; }
+  .title { font: 400 clamp(56px, 9vw, 130px)/.95 var(--display); color: #fff;
+    text-shadow: 0 0 30px rgba(63, 245, 208, .8), 0 6px 0 var(--pink); }
+  .title small { display: block; font-size: .28em; color: var(--teal); text-shadow: none; letter-spacing: .1em; margin-bottom: 18px; }
+  .sub { margin-top: 26px; font-size: clamp(20px, 2vw, 28px); color: var(--muted); }
+  .sub kbd { font: 400 1em var(--display); color: var(--gold); }
+  .blink { animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .overlay.win { align-items: start; padding-top: 5vh; }
+  .win .sub { color: #fff; text-shadow: 0 2px 10px #000, 0 0 20px #000; }
+  .win .title { color: var(--gold); text-shadow: 0 0 40px rgba(255, 201, 74, .8), 0 6px 0 #7a3b00; }
+
+  .flash { position: fixed; inset: 0; z-index: 19; pointer-events: none; opacity: 0;
+    background: radial-gradient(transparent 40%, rgba(255, 30, 70, .55)); transition: opacity .5s; }
+  .flash.on { opacity: 1; transition: opacity .06s; }
+
+  .keys { position: fixed; left: 14px; bottom: 12px; z-index: 22; font-size: 14px; color: #fff; opacity: .2; transition: opacity .3s; }
+  .keys:hover { opacity: .9; }
+  .keys kbd { font: 400 12px var(--display); color: var(--teal); }
+
+  @media (prefers-reduced-motion: reduce) { .void, .cake .rays { animation: none; } }
+</style>
+</head>
+<body>
+<div class="void"></div>
+<canvas id="dust"></canvas>
+<div class="scene"><div class="bridge" id="bridge"></div></div>
+<div class="fog"></div>
+<div class="flash" id="flash"></div>
+
+<div class="hud hide" id="hud">
+  <div class="top"><span id="qno">QUESTION 1 / 5</span><div class="pips" id="pips"></div></div>
+  <div class="q" id="q"></div>
+  <div class="choices" id="choices"></div>
+  <div class="confirm" id="confirm"></div>
+  <div class="verdict" id="verdict"></div>
+</div>
+
+<div class="overlay" id="intro">
+  <div>
+    <div class="title"><small>COMPLEX NUMBER · IMAGINARY UNIT</small>JUMP TO<br>CHOOSE</div>
+    <div class="sub">Cross <span id="nq">5</span> glass panels. One side is safe. The other one breaks.<br>Reach the end to win the <b style="color:var(--gold)">Oak Cake Roll</b>.</div>
+    <div class="sub blink">Press <kbd>SPACE</kbd> to start</div>
+  </div>
+</div>
+<div class="overlay win hide" id="win">
+  <div>
+    <div class="title">YOU MADE IT!</div>
+    <div class="sub">The Oak Cake Roll is yours. <span id="falls"></span></div>
+    <div class="sub">Press <kbd>R</kbd> to play again</div>
+  </div>
+</div>
+<canvas id="fx"></canvas>
+<div class="keys"><kbd>←</kbd> pick A · <kbd>→</kbd> pick B · <kbd>ENTER</kbd> jump · <kbd>SPACE</kbd> next · <kbd>R</kbd> restart · <kbd>M</kbd> sound <span id="snd">on</span> · <kbd>F</kbd> fullscreen</div>
+
+<script>
+/* ===== Questions: edit here ===== */
+const QUESTIONS = [
+  { q: 'Can <span class="m">x</span><sup>2</sup> = −1 be solved with a real number?', a: 'Yes', b: 'No', ans: 'b',
+    why: 'The square of any real number is never negative.' },
+  { q: 'How many different values are in one cycle of the powers of <span class="m">i</span>?', a: '2', b: '4', ans: 'b',
+    why: 'The cycle is <span class="m">i</span>, −1, −<span class="m">i</span>, 1, then it repeats. That is 4 values.' },
+  { q: 'What is the value of <span class="m">i</span><sup>6</sup>?', a: '1', b: '−1', ans: 'b',
+    why: '6 ÷ 4 = 1 remainder 2, so <span class="m">i</span><sup>6</sup> = <span class="m">i</span><sup>2</sup> = −1' },
+  { q: 'What is the value of <span class="m">i</span><sup>11</sup>?', a: '−<span class="m">i</span>', b: '<span class="m">i</span>', ans: 'a',
+    why: '11 ÷ 4 = 2 remainder 3, so <span class="m">i</span><sup>11</sup> = <span class="m">i</span><sup>3</sup> = −<span class="m">i</span>' },
+  { q: 'What is the value of <span class="m">i</span><sup>50</sup>?', a: '−1', b: '1', ans: 'a',
+    why: '50 ÷ 4 = 12 remainder 2, so <span class="m">i</span><sup>50</sup> = <span class="m">i</span><sup>2</sup> = −1' },
+  { q: 'What is the real part of <span class="m">z</span> = 3 + 5<span class="m">i</span>?', a: '3', b: '5', ans: 'a',
+    why: 'In <span class="m">z</span> = <span class="m">a</span> + <span class="m">b</span><span class="m">i</span>, the real part is <span class="m">a</span> = 3.' },
+  { q: 'What is the imaginary part of <span class="m">z</span> = 2 + 7<span class="m">i</span>?', a: '2<span class="m">i</span>', b: '7<span class="m">i</span>', ans: 'b',
+    why: 'The imaginary part is the term with <span class="m">i</span>: 7<span class="m">i</span>.' },
+  { q: 'What is the imaginary part of <span class="m">z</span> = 9 − 9<span class="m">i</span>?', a: '9<span class="m">i</span>', b: '−9<span class="m">i</span>', ans: 'b',
+    why: 'Keep the sign: 9 − 9<span class="m">i</span> = 9 + (−9)<span class="m">i</span>, so the imaginary part is −9<span class="m">i</span>.' },
+];
+
+/* ===== Geometry (bridge-plane pixels) ===== */
+const ROW = 300, PW = 250, PD = 180, GAPX = 120, TILT = 60;
+const XL = -(GAPX / 2 + PW / 2), XR = -XL;
+const rowY = (r) => -r * ROW;
+const N = QUESTIONS.length;
+
+const $ = (s) => document.querySelector(s);
+const bridge = $('#bridge');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const ease = { inOut: (t) => t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2, out: (t) => 1 - (1 - t) ** 3, in: (t) => t * t * t };
+function tween(ms, fn) {
+  return new Promise((res) => { const t0 = performance.now();
+    const step = (now) => { const t = Math.min(1, (now - t0) / ms); fn(t); t < 1 ? requestAnimationFrame(step) : res(); };
+    requestAnimationFrame(step); });
+}
+function el(cls, x, y, w, h, html = '') {
+  const d = document.createElement('div'); d.className = cls;
+  Object.assign(d.style, { left: x - w / 2 + 'px', top: y - h / 2 + 'px', width: w + 'px', height: h + 'px' });
+  d.innerHTML = html; bridge.appendChild(d); return d;
+}
+
+/* ===== Sound (synthesised, no files) ===== */
+let AC = null, soundOn = true;
+function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
+function tone(f, dur, type = 'sine', vol = .18, slide = 0, delay = 0) {
+  if (!soundOn) return; const a = ac(), t = a.currentTime + delay, o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(f * slide, t + dur);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + .05);
+}
+function noise(dur, vol = .3, hp = 2500) {
+  if (!soundOn) return; const a = ac(), b = a.createBuffer(1, a.sampleRate * dur, a.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 2;
+  const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  f.type = 'highpass'; f.frequency.value = hp; g.gain.value = vol; s.buffer = b; s.connect(f).connect(g).connect(a.destination); s.start();
+}
+const sfx = {
+  jump: () => tone(260, .25, 'triangle', .15, 2.2),
+  land: () => tone(140, .12, 'sine', .25, .6),
+  good: () => { tone(660, .18, 'triangle', .14); tone(990, .3, 'triangle', .14, 1, .1); },
+  crack: () => { noise(.12, .35, 3000); tone(1800, .08, 'square', .05, .5); },
+  shatter: () => { noise(.9, .45, 1800); for (let i = 0; i < 6; i++) tone(2000 + Math.random() * 2500, .25, 'sine', .04, 1, Math.random() * .4); },
+  fall: () => tone(520, .9, 'sawtooth', .07, .15),
+  win: () => [523, 659, 784, 1047, 784, 1047].forEach((f, k) => tone(f, .35, 'triangle', .14, 1, k * .13)),
+};
+
+/* ===== World ===== */
+let panels = [], hero, shadow, cake, H = {};
+function build() {
+  bridge.innerHTML = ''; panels = [];
+  const len = (N + 1) * ROW + 260;
+  el('rail', -(GAPX / 2 + PW) - 14, rowY(N / 2), 10, len);
+  el('rail', (GAPX / 2 + PW) + 14, rowY(N / 2), 10, len);
+  el('platform', 0, rowY(-1) + 30, 720, 300);
+  for (let r = 0; r < N; r++) {
+    el('rowno', 0, rowY(r), 100, 70, r + 1);
+    const crackSvg = `<svg viewBox="0 0 250 180" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+      <path d="M125 90 L40 20 M125 90 L210 30 M125 90 L230 120 M125 90 L150 175 M125 90 L20 140 M125 90 L90 175 M70 45 L95 30 M180 50 L200 75 M60 130 L40 110"/></svg>`;
+    panels.push(['a', 'b'].map((side) => {
+      const p = el('glass dim', side === 'a' ? XL : XR, rowY(r), PW, PD, crackSvg + `<div class="lab"><b>${side.toUpperCase()}</b><span>${QUESTIONS[r][side]}</span></div>`);
+      p.addEventListener('click', () => { if (r !== row) return; picked === side ? choose(side) : pick(side); });
+      return p;
+    }));
+  }
+  el('platform end', 0, rowY(N) - 40, 720, 340);
+  shadow = el('shadow', 0, 0, 120, 46);
+  hero = el('hero', 0, 0, 170, 152, '<img src="assets/firefly.png" alt="">');
+  cake = el('cake', 0, rowY(N) - 60, 270, 270, '<div class="rays"></div><img src="assets/cake.png" alt="Oak Cake Roll">');
+  cake.style.transform = `translate3d(0, -135px, 0) rotateX(${-TILT}deg)`;
+}
+function drawHero() {
+  const { x, y, z, sx, sy, rot, op } = H;
+  hero.style.transform = `translate3d(${x}px, ${y - 76}px, ${z}px) rotateX(${-TILT}deg) rotateZ(${rot}deg) scale(${sx}, ${sy})`;
+  hero.style.opacity = op;
+  const k = Math.max(.2, 1 - Math.max(0, z) / 300);
+  shadow.style.transform = `translate3d(${x}px, ${y}px, 1px) scale(${k})`;
+  shadow.style.opacity = z < -5 ? 0 : k * op;
+}
+function setCam(row) { bridge.style.setProperty('--cam', (row + .55) * ROW + 'px'); }
+
+/* ===== Game state ===== */
+let row = 0, phase = 'intro', heroX = 0, falls = 0, picked = null;   // phase: intro | ask | moving | judged | won
+
+function reset() {
+  build(); row = 0; falls = 0; heroX = 0;
+  H = { x: 0, y: rowY(-1), z: 420, sx: 1, sy: 1, rot: 0, op: 0 }; drawHero();
+  bridge.style.transition = 'none'; setCam(-1.5); bridge.offsetHeight; bridge.style.transition = '';
+  $('#win').classList.add('hide'); $('#intro').classList.remove('hide'); $('#hud').classList.add('hide');
+  phase = 'intro'; confetti.length = 0;
+}
+function pips() { $('#pips').innerHTML = QUESTIONS.map((_, k) => `<i class="${k < row ? 'done' : k === row ? 'now' : ''}"></i>`).join(''); }
+function ask() {
+  const Q = QUESTIONS[row]; phase = 'ask';
+  panels.forEach((pr, r) => pr.forEach((p) => { p.classList.toggle('dim', r !== row); p.classList.toggle('active', r === row && !p.classList.contains('gone')); }));
+  $('#qno').textContent = `QUESTION ${row + 1} / ${N}`; pips();
+  $('#q').innerHTML = Q.q;
+  $('#choices').innerHTML = `<span id="ca"><kbd>←</kbd> A: ${Q.a}</span><span id="cb">B: ${Q.b} <kbd>→</kbd></span>`;
+  pick(null);
+  $('#verdict').className = 'verdict'; $('#verdict').innerHTML = '';
+  const hud = $('#hud'); hud.classList.remove('hide'); hud.classList.remove('pop'); void hud.offsetWidth; hud.classList.add('pop');
+}
+
+function pick(side) {
+  if (side && phase !== 'ask') return;
+  if (side && panels[row][side === 'a' ? 0 : 1].classList.contains('gone')) return;
+  if (side && side !== picked) tone(side === 'a' ? 520 : 620, .09, 'square', .06);
+  picked = side;
+  panels.forEach((pr, r) => pr.forEach((p, k) => p.classList.toggle('pick', r === row && side === (k ? 'b' : 'a'))));
+  const ca = $('#ca'), cb = $('#cb'); if (ca) { ca.classList.toggle('on', side === 'a'); cb.classList.toggle('on', side === 'b'); }
+  $('#confirm').innerHTML = phase !== 'ask' ? '' : side ? `Picked <b style="color:var(--gold)">${side.toUpperCase()}</b> · press <kbd>ENTER</kbd> to jump (or switch with ← →)` : 'Press <kbd>←</kbd> or <kbd>→</kbd> to pick a side';
+}
+
+async function appear() {
+  await wait(450);
+  await tween(700, (t) => { H.z = 420 * (1 - ease.out(t)); H.op = Math.min(1, t * 2.5); drawHero(); });
+  H.z = 0; sfx.land();
+  await tween(240, (t) => { const s = Math.sin(Math.PI * t); H.sy = 1 - .18 * s; H.sx = 1 + .12 * s; drawHero(); });
+  H.sx = H.sy = 1; drawHero(); await wait(150);
+}
+
+async function jumpTo(x, y, ms = 700, height = 120) {
+  sfx.jump();
+  await tween(110, (t) => { H.sy = 1 - .16 * t; H.sx = 1 + .1 * t; drawHero(); });
+  const x0 = H.x, y0 = H.y;
+  await tween(ms, (t) => { const e = ease.inOut(t);
+    H.x = x0 + (x - x0) * e; H.y = y0 + (y - y0) * e; H.z = 4 * height * t * (1 - t);
+    H.sy = 1 + .12 * Math.sin(Math.PI * t); H.sx = 1 - .06 * Math.sin(Math.PI * t); drawHero(); });
+  H.z = 0; sfx.land();
+  await tween(220, (t) => { const s = Math.sin(Math.PI * t); H.sy = 1 - .18 * s; H.sx = 1 + .12 * s; drawHero(); });
+  H.sx = H.sy = 1; drawHero();
+}
+
+async function choose(side, r = row) {
+  if (phase !== 'ask' || r !== row) return;
+  const p = panels[row][side === 'a' ? 0 : 1];
+  if (p.classList.contains('gone')) return;
+  phase = 'moving'; pick(null); $('#confirm').innerHTML = '';
+  const Q = QUESTIONS[row], x = side === 'a' ? XL : XR, ok = side === Q.ans;
+  panels[row].forEach((q) => q.classList.remove('active'));
+  setCam(row);
+  await jumpTo(x, rowY(row));
+  const v = $('#verdict');
+  if (ok) {
+    p.classList.add('safe'); sfx.good(); heroX = x; burst(.5, .62, 26, ['#4dff9a', '#3ff5d0', '#fff']);
+    v.className = 'verdict ok pop'; v.innerHTML = `✓ Correct!<span class="why">${Q.why}</span><span class="next">${row === N - 1 ? 'SPACE: jump to the cake' : 'SPACE: next question'}</span>`;
+    row++; pips(); phase = 'judged';
+  } else {
+    p.classList.add('crack'); sfx.crack(); await wait(420);
+    shatter(p); sfx.shatter(); sfx.fall(); flash();
+    const x0 = H.x;
+    await tween(1000, (t) => { H.z = -900 * ease.in(t); H.rot = 40 * t * (x0 < 0 ? -1 : 1); H.op = 1 - ease.in(t); drawHero(); });
+    falls++;
+    v.className = 'verdict no pop'; v.innerHTML = `✗ The glass broke!<span class="why">${Q.why}</span><span class="next">Try again from the last safe panel.</span>`;
+    // respawn on last safe spot
+    const ry = rowY(row - 1);
+    Object.assign(H, { x: row === 0 ? 0 : heroX, y: ry, z: 420, rot: 0, op: 0 }); setCam(row - 1);
+    await wait(350);
+    await tween(650, (t) => { H.z = 420 * (1 - ease.out(t)); H.op = Math.min(1, t * 2.5); drawHero(); });
+    H.z = 0; sfx.land(); await tween(200, (t) => { const s = Math.sin(Math.PI * t); H.sy = 1 - .15 * s; H.sx = 1 + .1 * s; drawHero(); });
+    H.sx = H.sy = 1; drawHero();
+    phase = 'ask'; pick(null); panels[row].forEach((q) => { if (!q.classList.contains('gone')) q.classList.add('active'); });
+  }
+}
+
+function shatter(p) {
+  const L = parseFloat(p.style.left), T = parseFloat(p.style.top);
+  p.classList.remove('crack'); p.classList.add('gone');
+  const cols = 4, rows = 3, w = PW / cols, h = PD / rows;
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const s = document.createElement('div'); s.className = 'shard';
+    const pts = Array.from({ length: 3 + (Math.random() * 2 | 0) }, () => `${Math.random() * 100}% ${Math.random() * 100}%`).join(',');
+    Object.assign(s.style, { left: L + i * w + 'px', top: T + j * h + 'px', width: w + 'px', height: h + 'px', clipPath: `polygon(${pts})` });
+    bridge.appendChild(s);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      s.style.transform = `translate3d(${(Math.random() - .5) * 160}px, ${(Math.random() - .5) * 160}px, ${-500 - Math.random() * 500}px) rotateX(${Math.random() * 720}deg) rotateY(${Math.random() * 720}deg)`;
+      s.style.opacity = 0; }));
+    setTimeout(() => s.remove(), 1300);
+  }
+}
+function flash() { const f = $('#flash'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 120); }
+
+async function next() {
+  if (phase !== 'judged') return;
+  if (row < N) { ask(); return; }
+  phase = 'moving'; $('#hud').classList.add('hide');
+  setCam(N - .05);
+  await jumpTo(0, rowY(N) + 40, 900, 180);
+  phase = 'won'; sfx.win();
+  await tween(500, (t) => { H.rot = 360 * ease.out(t); drawHero(); }); H.rot = 0; drawHero();
+  for (let k = 0; k < 4; k++) setTimeout(() => burst(.2 + Math.random() * .6, .35 + Math.random() * .2, 70, ['#ffc94a', '#ff3d8b', '#3ff5d0', '#fff']), k * 280);
+  $('#falls').textContent = falls === 0 ? 'Perfect run — no glass broken!' : `Glass broken on the way: ${falls}`;
+  $('#win').classList.remove('hide');
+}
+
+/* ===== Controls ===== */
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === 'm') { soundOn = !soundOn; $('#snd').textContent = soundOn ? 'on' : 'off'; return; }
+  if (k === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); return; }
+  if (k === 'r') { reset(); return; }
+  if (phase === 'intro' && (k === ' ' || k === 'enter')) {
+    e.preventDefault(); ac(); $('#intro').classList.add('hide'); setCam(-1); phase = 'moving'; appear().then(ask); return; }
+  if (k === 'arrowleft' || k === 'a') pick('a');
+  else if (k === 'arrowright' || k === 'b') pick('b');
+  else if (k === 'enter') { e.preventDefault(); if (phase === 'ask') { if (picked) choose(picked); } else next(); }
+  else if (k === ' ') { e.preventDefault(); next(); }
+});
+
+/* ===== Canvas: drifting dust + confetti ===== */
+const dust = $('#dust').getContext('2d'), fx = $('#fx').getContext('2d');
+let W, Hh, motes = []; const confetti = [];
+function size() {
+  const d = devicePixelRatio || 1; W = innerWidth; Hh = innerHeight;
+  for (const c of [dust, fx]) { c.canvas.width = W * d; c.canvas.height = Hh * d; c.setTransform(d, 0, 0, d, 0, 0); }
+  motes = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * Hh, r: Math.random() * 1.8 + .3, v: Math.random() * .25 + .05, a: Math.random() * .5 + .1 }));
+}
+function burst(fx0, fy0, n, colors) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = Math.random() * 9 + 3;
+    confetti.push({ x: fx0 * W, y: fy0 * Hh, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 5, r: Math.random() * 360, vr: (Math.random() - .5) * 20,
+      w: Math.random() * 8 + 5, h: Math.random() * 5 + 3, c: colors[i % colors.length], life: 1 }); }
+}
+function loop() {
+  dust.clearRect(0, 0, W, Hh);
+  for (const m of motes) { m.y -= m.v; m.x += Math.sin((m.y + m.r * 100) / 80) * .15; if (m.y < -5) { m.y = Hh + 5; m.x = Math.random() * W; }
+    dust.globalAlpha = m.a; dust.fillStyle = '#9ff'; dust.beginPath(); dust.arc(m.x, m.y, m.r, 0, 7); dust.fill(); }
+  fx.clearRect(0, 0, W, Hh);
+  for (let i = confetti.length - 1; i >= 0; i--) { const c = confetti[i];
+    c.vy += .25; c.vx *= .99; c.x += c.vx; c.y += c.vy; c.r += c.vr; c.life -= .006;
+    if (c.life <= 0 || c.y > Hh + 20) { confetti.splice(i, 1); continue; }
+    fx.save(); fx.globalAlpha = Math.min(1, c.life * 2); fx.translate(c.x, c.y); fx.rotate(c.r * Math.PI / 180); fx.fillStyle = c.c; fx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h); fx.restore(); }
+  requestAnimationFrame(loop);
+}
+$('#nq').textContent = QUESTIONS.length;
+addEventListener('resize', size); size(); loop(); reset();
+</script>
+</body>
+</html>
