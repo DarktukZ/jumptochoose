@@ -63,4 +63,4 @@ jump-to-choose/
 
 - สะพาน 3 มิติทำด้วย CSS 3D transform (`perspective`, `rotateX`)
 - ฉากหลังฝุ่นลอยและพลุกระดาษตอนชนะวาดด้วย `<canvas>`
-- เสียงทั้งหมดสร้างด้วย Web Audio API ในโค้ด ไม่มีไฟล์เสียง
+- เสียงเอฟเฟกต์สร้างด้วย Web Audio API ในโค้ด · เสียงพากย์ Firefly อยู่ใน `assets/audio/` (ตัดจากคลิปเสียงรวม): เริ่มเกม `start-burn` · ตอบถูกสุ่ม `right-ignite` / `right-victory` / `right-mechanism` · ตอบผิด `wrong-terminated` · กลับขึ้นมาหลังตก `comeback` · ถึงเค้ก `rare-find` แล้วต่อด้วยเพลง `win-music` (楽音 - mosi mosi？ ช่วง 0:39–1:15) · เสียงพูดดัง 50% เพลง 25%

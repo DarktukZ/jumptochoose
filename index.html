@@ -172,11 +172,11 @@ const QUESTIONS = [
     why: 'The square of any real number is never negative.' },
   { q: 'How many different values are in one cycle of the powers of <span class="m">i</span>?', a: '2', b: '4', ans: 'b',
     why: 'The cycle is <span class="m">i</span>, −1, −<span class="m">i</span>, 1, then it repeats. That is 4 values.' },
-  { q: 'What is the value of <span class="m">i</span><sup>6</sup>?', a: '1', b: '−1', ans: 'b',
+  { q: 'What is the value of <span class="m">i</span><sup>6</sup>?', a: '−1', b: '−<span class="m">i</span>', ans: 'a',
     why: '6 ÷ 4 = 1 remainder 2, so <span class="m">i</span><sup>6</sup> = <span class="m">i</span><sup>2</sup> = −1' },
   { q: 'What is the value of <span class="m">i</span><sup>11</sup>?', a: '−<span class="m">i</span>', b: '<span class="m">i</span>', ans: 'a',
     why: '11 ÷ 4 = 2 remainder 3, so <span class="m">i</span><sup>11</sup> = <span class="m">i</span><sup>3</sup> = −<span class="m">i</span>' },
-  { q: 'What is the value of <span class="m">i</span><sup>50</sup>?', a: '−1', b: '1', ans: 'a',
+  { q: 'What is the value of <span class="m">i</span><sup>50</sup>?', a: '1', b: '−1', ans: 'b',
     why: '50 ÷ 4 = 12 remainder 2, so <span class="m">i</span><sup>50</sup> = <span class="m">i</span><sup>2</sup> = −1' },
   { q: 'What is the real part of <span class="m">z</span> = 3 + 5<span class="m">i</span>?', a: '3', b: '5', ans: 'a',
     why: 'In <span class="m">z</span> = <span class="m">a</span> + <span class="m">b</span><span class="m">i</span>, the real part is <span class="m">a</span> = 3.' },
@@ -207,8 +207,25 @@ function el(cls, x, y, w, h, html = '') {
   d.innerHTML = html; bridge.appendChild(d); return d;
 }
 
-/* ===== Sound (synthesised, no files) ===== */
+/* ===== Sound (synthesised + start voice line) ===== */
 let AC = null, soundOn = true;
+/* Firefly voice lines (assets/audio). voice() resolves when the line ends (instantly if sound is off). */
+const VOICES = {}, VOICE_FILES = { start: 'start-burn', cake: 'rare-find', wrong: 'wrong-terminated', back: 'comeback',
+  right1: 'right-ignite', right2: 'right-victory', right3: 'right-mechanism' };
+const VOICE_VOL = .5, MUSIC_VOL = .25;
+for (const [k, f] of Object.entries(VOICE_FILES)) { VOICES[k] = new Audio(`assets/audio/${f}.mp3`); VOICES[k].preload = 'auto'; VOICES[k].volume = VOICE_VOL; }
+const winMusic = new Audio('assets/audio/win-music.mp3'); winMusic.preload = 'auto'; winMusic.volume = MUSIC_VOL;
+function stopMusic() { winMusic.pause(); winMusic.currentTime = 0; }
+let curVoice = null, voiceDone = null;
+function stopVoice() { if (curVoice) curVoice.pause(); curVoice = null; if (voiceDone) { const d = voiceDone; voiceDone = null; d(); } }
+function voice(k) {
+  stopVoice();
+  if (!soundOn) return Promise.resolve();
+  const v = curVoice = VOICES[k]; v.currentTime = 0;
+  return new Promise((res) => { const done = voiceDone = () => { if (voiceDone === done) voiceDone = null; res(); };
+    v.onended = done; v.onerror = done; v.play().catch(done); });
+}
+const rightVoice = () => voice('right' + (1 + Math.floor(Math.random() * 3)));
 function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
 function tone(f, dur, type = 'sine', vol = .18, slide = 0, delay = 0) {
   if (!soundOn) return; const a = ac(), t = a.currentTime + delay, o = a.createOscillator(), g = a.createGain();
@@ -270,7 +287,7 @@ function setCam(row) { bridge.style.setProperty('--cam', (row + .55) * ROW + 'px
 let row = 0, phase = 'intro', heroX = 0, falls = 0, picked = null;   // phase: intro | ask | moving | judged | won
 
 function reset() {
-  build(); row = 0; falls = 0; heroX = 0;
+  stopVoice(); stopMusic(); build(); row = 0; falls = 0; heroX = 0;
   H = { x: 0, y: rowY(-1), z: 420, sx: 1, sy: 1, rot: 0, op: 0 }; drawHero();
   bridge.style.transition = 'none'; setCam(-1.5); bridge.offsetHeight; bridge.style.transition = '';
   $('#win').classList.add('hide'); $('#intro').classList.remove('hide'); $('#hud').classList.add('hide');
@@ -329,12 +346,12 @@ async function choose(side, r = row) {
   await jumpTo(x, rowY(row));
   const v = $('#verdict');
   if (ok) {
-    p.classList.add('safe'); sfx.good(); heroX = x; burst(.5, .62, 26, ['#4dff9a', '#3ff5d0', '#fff']);
+    p.classList.add('safe'); sfx.good(); rightVoice(); heroX = x; burst(.5, .62, 26, ['#4dff9a', '#3ff5d0', '#fff']);
     v.className = 'verdict ok pop'; v.innerHTML = `✓ Correct!<span class="why">${Q.why}</span><span class="next">${row === N - 1 ? 'SPACE: jump to the cake' : 'SPACE: next question'}</span>`;
     row++; pips(); phase = 'judged';
   } else {
     p.classList.add('crack'); sfx.crack(); await wait(420);
-    shatter(p); sfx.shatter(); sfx.fall(); flash();
+    shatter(p); sfx.shatter(); sfx.fall(); flash(); const wrongLine = voice('wrong');
     const x0 = H.x;
     await tween(1000, (t) => { H.z = -900 * ease.in(t); H.rot = 40 * t * (x0 < 0 ? -1 : 1); H.op = 1 - ease.in(t); drawHero(); });
     falls++;
@@ -342,7 +359,7 @@ async function choose(side, r = row) {
     // respawn on last safe spot
     const ry = rowY(row - 1);
     Object.assign(H, { x: row === 0 ? 0 : heroX, y: ry, z: 420, rot: 0, op: 0 }); setCam(row - 1);
-    await wait(350);
+    await Promise.all([wrongLine, wait(350)]); voice('back');
     await tween(650, (t) => { H.z = 420 * (1 - ease.out(t)); H.op = Math.min(1, t * 2.5); drawHero(); });
     H.z = 0; sfx.land(); await tween(200, (t) => { const s = Math.sin(Math.PI * t); H.sy = 1 - .15 * s; H.sx = 1 + .1 * s; drawHero(); });
     H.sx = H.sy = 1; drawHero();
@@ -373,7 +390,7 @@ async function next() {
   phase = 'moving'; $('#hud').classList.add('hide');
   setCam(N - .05);
   await jumpTo(0, rowY(N) + 40, 900, 180);
-  phase = 'won'; sfx.win();
+  phase = 'won'; sfx.win(); voice('cake').then(() => { if (phase === 'won' && soundOn) winMusic.play().catch(() => {}); });
   await tween(500, (t) => { H.rot = 360 * ease.out(t); drawHero(); }); H.rot = 0; drawHero();
   for (let k = 0; k < 4; k++) setTimeout(() => burst(.2 + Math.random() * .6, .35 + Math.random() * .2, 70, ['#ffc94a', '#ff3d8b', '#3ff5d0', '#fff']), k * 280);
   $('#falls').textContent = falls === 0 ? 'Perfect run — no glass broken!' : `Glass broken on the way: ${falls}`;
@@ -383,11 +400,11 @@ async function next() {
 /* ===== Controls ===== */
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (k === 'm') { soundOn = !soundOn; $('#snd').textContent = soundOn ? 'on' : 'off'; return; }
+  if (k === 'm') { soundOn = !soundOn; if (!soundOn) { stopVoice(); stopMusic(); } $('#snd').textContent = soundOn ? 'on' : 'off'; return; }
   if (k === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); return; }
   if (k === 'r') { reset(); return; }
   if (phase === 'intro' && (k === ' ' || k === 'enter')) {
-    e.preventDefault(); ac(); $('#intro').classList.add('hide'); setCam(-1); phase = 'moving'; appear().then(ask); return; }
+    e.preventDefault(); ac(); $('#intro').classList.add('hide'); setCam(-1); phase = 'moving'; Promise.all([appear(), voice('start')]).then(() => { if (phase === 'moving' && row === 0) ask(); }); return; }
   if (k === 'arrowleft' || k === 'a') pick('a');
   else if (k === 'arrowright' || k === 'b') pick('b');
   else if (k === 'enter') { e.preventDefault(); if (phase === 'ask') { if (picked) choose(picked); } else next(); }
